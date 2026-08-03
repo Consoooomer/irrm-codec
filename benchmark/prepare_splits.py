@@ -1,7 +1,8 @@
 """Issue 1: build the common human TRB dataset shared by all benchmark experiments.
 
 Steps:
-  1. load the AIRR table and drop invalid / duplicate CDR3 amino-acid sequences
+  1. load the AIRR table and drop invalid / duplicate CDR3 amino-acid sequences,
+     then standardize V/J gene calls and drop rows no representation can encode
   2. match sequences to their TCRemP embeddings and verify the alignment
   3. compute and cache log10(pgen) and log10(pgen_1mm)
   4. build one reproducible 80/10/10 split keyed on the unique CDR3 sequence
@@ -18,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+import tidytcells as tt
 
 from irrm_codec.dataio import normalize_locus_name
 from irrm_codec.tokenization import VALID_AA
@@ -72,6 +74,19 @@ def clean_sequences(df, cdr3_col, locus, min_len, max_len, log):
         drop |= mask
     df = df[~drop].copy()
 
+    # SCEPTR consumes V/J gene calls and rejects anything non-standard or
+    # non-functional, while the other representations only read the CDR3. Resolving the
+    # gene names here keeps a single row set that every representation can encode.
+    for column, gene_type in (("v_call", "V"), ("j_call", "J")):
+        df[column] = df[column].map(
+            lambda value: tt.tr.standardize(
+                value, species="homosapiens", enforce_functional=True, log_failures=False
+            )
+        )
+        unusable = df[column].isna()
+        report[f"dropped_non_functional_{gene_type.lower()}_call"] = int(unusable.sum())
+        df = df[~unusable].copy()
+
     duplicated = df[cdr3_col].duplicated(keep="first")
     report["dropped_duplicate_cdr3"] = int(duplicated.sum())
     df = df[~duplicated].copy()
@@ -114,21 +129,34 @@ def check_alignment(emb, sequences, min_corr, log):
     return {"length_corr": corr, "shuffled_length_corr": shuffled, "min_corr_threshold": min_corr}
 
 
+def _pgen_lookup(cache_path, needed):
+    """Return per-sequence pgen values from the cache, or None if it cannot serve them.
+
+    Values are keyed on the CDR3 sequence rather than on row position, so tightening
+    the cleaning filters later reuses the cache instead of recomputing it.
+    """
+    if not cache_path.exists():
+        return None
+    cached = pd.read_csv(cache_path, sep="\t")
+    if not all(c in cached.columns for c in ("junction_aa", *PGEN_COLUMNS)):
+        return None
+    cached = cached.drop_duplicates("junction_aa").set_index("junction_aa")
+    if not needed.isin(cached.index).all():
+        return None
+    return cached.loc[needed, list(PGEN_COLUMNS)].reset_index(drop=True)
+
+
 def ensure_pgen(df, args, output_dir, log):
     cache_path = output_dir / "pgen.tsv"
     clean_airr_path = output_dir / "cleaned_airr.tsv"
     df.to_csv(clean_airr_path, sep="\t", index=False)
 
+    hit = _pgen_lookup(cache_path, df["junction_aa"])
+    if hit is not None:
+        log.info("reusing cached pgen values for all %d sequences from %s", len(hit), cache_path)
+        return hit, {"source": "cache", "path": str(cache_path)}
     if cache_path.exists():
-        cached = pd.read_csv(cache_path, sep="\t")
-        same_rows = len(cached) == len(df)
-        same_seqs = same_rows and np.array_equal(
-            cached["junction_aa"].astype(str).to_numpy(), df["junction_aa"].to_numpy()
-        )
-        if same_seqs and all(c in cached.columns for c in PGEN_COLUMNS):
-            log.info("reusing cached pgen table %s", cache_path)
-            return cached, {"source": "cache", "path": str(cache_path)}
-        log.warning("cached pgen table does not match the cleaned data; recomputing")
+        log.warning("cached pgen table does not cover the cleaned data; recomputing")
 
     if args.skip_pgen:
         raise FileNotFoundError(
@@ -148,10 +176,10 @@ def ensure_pgen(df, args, output_dir, log):
     log.info("computing pgen: %s", " ".join(cmd))
     subprocess.run(cmd, check=True, cwd=Path.cwd())
 
-    table = pd.read_csv(cache_path, sep="\t")
-    if not np.array_equal(table["junction_aa"].astype(str).to_numpy(), df["junction_aa"].to_numpy()):
-        raise ValueError("pgen output rows do not line up with the cleaned AIRR rows.")
-    return table, {"source": "computed", "path": str(cache_path)}
+    hit = _pgen_lookup(cache_path, df["junction_aa"])
+    if hit is None:
+        raise ValueError("pgen output does not cover every cleaned sequence.")
+    return hit, {"source": "computed", "path": str(cache_path)}
 
 
 def make_splits(n, train_fraction, val_fraction, seed):
