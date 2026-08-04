@@ -16,7 +16,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
-#SBATCH --time=12:00:00
+# A 60-epoch run takes ~40 min on a GTX 1080 Ti (39 s/epoch at train=79730), so this
+# leaves ample headroom while keeping the job small enough to schedule quickly.
+#SBATCH --time=02:00:00
 #SBATCH --array=0-14%2
 #SBATCH --output=/mnt/tank/scratch/mpodsytnik/irrm-codec/logs/%x_%A_%a.out
 #SBATCH --error=/mnt/tank/scratch/mpodsytnik/irrm-codec/logs/%x_%A_%a.err
