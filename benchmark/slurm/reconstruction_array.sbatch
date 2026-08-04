@@ -4,7 +4,11 @@
 # 5 representations x 3 seeds = 15 tasks. The array is throttled to 2 concurrent
 # tasks because the cluster allows at most 2 GPUs per user by default.
 #
+# The log directory must exist before submitting: Slurm opens the --output file before
+# the script body runs, so a missing directory kills the job immediately.
+#
 # Submit from the repository root:
+#   mkdir -p /mnt/tank/scratch/mpodsytnik/irrm-codec/logs
 #   sbatch benchmark/slurm/reconstruction_array.sbatch
 #
 # Override anything without editing the file:
@@ -46,7 +50,7 @@ SEEDS=(42 43 44)
 REPRESENTATION="${REPRESENTATIONS[$((SLURM_ARRAY_TASK_ID / ${#SEEDS[@]}))]}"
 SEED="${SEEDS[$((SLURM_ARRAY_TASK_ID % ${#SEEDS[@]}))]}"
 
-mkdir -p "$SCRATCH/logs" "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
 
 # conda init is deliberately not used: it would edit the shared account's ~/.bashrc.
 source "$CONDA_ROOT/bin/activate"
