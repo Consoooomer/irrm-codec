@@ -61,6 +61,9 @@ echo "representation=$REPRESENTATION seed=$SEED dim=$BOTTLENECK_DIM subset=$TRAI
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 
 cd "$REPO"
+# Slurm redirects stdout to a file, where Python block-buffers by default and the log
+# appears only in bursts. Unbuffered output keeps the .out file usable for monitoring.
+export PYTHONUNBUFFERED=1
 srun python -m benchmark.train_decoder \
   --dataset-dir "$DATASET_DIR" \
   --bottleneck-dir "$BOTTLENECK_DIR" \
