@@ -44,7 +44,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-$SCRATCH/artifacts/benchmark/pgen}"
 SUBSETS="${SUBSETS:-1k 10k}"
 EPOCHS="${EPOCHS:-60}"
 BATCH_SIZE="${BATCH_SIZE:-256}"
-PATIENCE="${PATIENCE:-8}"
+# Left to the trainer's own default so the cosine schedule is not cut short.
+PATIENCE="${PATIENCE:-12}"
 
 # Seeds 42-44 already ran in the main array; these continue the sequence.
 CONFIGS=()

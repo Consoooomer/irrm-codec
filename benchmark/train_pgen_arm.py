@@ -56,7 +56,10 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=1e-4)
-    p.add_argument("--patience", type=int, default=8)
+    # Wider than the reconstruction runs use: the cosine schedule only pays off if training
+    # reaches the low-learning-rate tail, and stopping at epoch 17 of 60 would decay the
+    # rate by under a fifth.
+    p.add_argument("--patience", type=int, default=12)
     p.add_argument("--max-len", type=int, default=40)
     p.add_argument("--threads", type=int, default=8)
     return p.parse_args()
@@ -255,6 +258,10 @@ def fit_neural(args, features, targets, log):
 
     model = build_model(args, features["train"].shape[-1], log).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # A constant learning rate leaves the model bouncing around the minimum: validation
+    # loss oscillates, early stopping fires at an arbitrary epoch, and the IRRM arms end up
+    # spreading roughly tenfold wider across seeds than the frozen-embedding arms.
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     log.info("device=%s params=%.2fM", device, sum(p.numel() for p in model.parameters()) / 1e6)
 
     best_val, best_epoch = float("inf"), 0
@@ -265,6 +272,7 @@ def fit_neural(args, features, targets, log):
     for epoch in range(1, args.epochs + 1):
         train_loss = run_epoch(model, loaders["train"], device, is_sequence, optimizer)
         val_loss = run_epoch(model, loaders["val"], device, is_sequence)
+        scheduler.step()
         history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
         if epoch % 5 == 0 or epoch == 1:
             log.info("epoch=%d train_loss=%.4f val_loss=%.4f", epoch, train_loss, val_loss)

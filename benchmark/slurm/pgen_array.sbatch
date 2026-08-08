@@ -38,7 +38,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-$SCRATCH/artifacts/benchmark/pgen}"
 
 EPOCHS="${EPOCHS:-60}"
 BATCH_SIZE="${BATCH_SIZE:-256}"
-PATIENCE="${PATIENCE:-8}"
+# Left to the trainer's own default so the cosine schedule is not cut short.
+PATIENCE="${PATIENCE:-12}"
 
 # Build the task list in a fixed order so a task id always maps to the same run.
 CONFIGS=()

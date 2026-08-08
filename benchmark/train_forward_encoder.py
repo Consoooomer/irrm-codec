@@ -145,6 +145,9 @@ def main():
 
     model = ForwardModel(output_dim=matrix.shape[1], max_len=args.max_len).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # A constant learning rate leaves the model bouncing around the minimum, which shows
+    # up as an oscillating validation loss and, downstream, as large seed-to-seed spread.
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     log.info("model params=%.2fM output_dim=%d", sum(p.numel() for p in model.parameters()) / 1e6, matrix.shape[1])
 
     best_val = float("inf")
@@ -155,6 +158,7 @@ def main():
     for epoch in range(1, args.epochs + 1):
         train_metrics = run_epoch(model, loaders["train"], device, optimizer)
         val_metrics = run_epoch(model, loaders["val"], device)
+        scheduler.step()
         history.append(
             {
                 "epoch": epoch,
