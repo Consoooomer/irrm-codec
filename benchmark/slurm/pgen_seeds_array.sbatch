@@ -7,11 +7,15 @@
 # meant to measure. Seven more seeds take the standard error from 0.033 to 0.018 and make
 # the pretraining question answerable.
 #
-# Only the arms and the split where the comparison matters: 2 arms x 2 targets x 7 seeds.
-# Results land in the same output directory, so collect_pgen picks them up with no changes.
+# All three training sizes, so the low-data question gets the same statistical treatment
+# as the full-data one: 2 arms x 2 targets x 3 subsets x 7 seeds. Results land in the same
+# output directory, so collect_pgen picks them up with no changes.
 #
 #   mkdir -p /mnt/tank/scratch/mpodsytnik/irrm-codec/logs
 #   sbatch benchmark/slurm/pgen_seeds_array.sbatch
+#
+# To repeat only some of them, override SUBSETS:
+#   sbatch --export=ALL,SUBSETS="1k 10k" benchmark/slurm/pgen_seeds_array.sbatch
 
 #SBATCH --job-name=irrm-pgen-seeds
 #SBATCH --partition=gpu
@@ -19,7 +23,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --time=01:00:00
-#SBATCH --array=0-27%2
+#SBATCH --array=0-55%2
 #SBATCH --output=/mnt/tank/scratch/mpodsytnik/irrm-codec/logs/%x_%A_%a.out
 #SBATCH --error=/mnt/tank/scratch/mpodsytnik/irrm-codec/logs/%x_%A_%a.err
 
@@ -35,7 +39,9 @@ REPRESENTATIONS_DIR="${REPRESENTATIONS_DIR:-$SCRATCH/data/benchmark/trb/represen
 PRETRAINED_CHECKPOINT="${PRETRAINED_CHECKPOINT:-$SCRATCH/artifacts/benchmark/forward_encoder/best.pt}"
 OUTPUT_DIR="${OUTPUT_DIR:-$SCRATCH/artifacts/benchmark/pgen}"
 
-TRAIN_SUBSET="${TRAIN_SUBSET:-all}"
+# "all" is excluded by default because it was covered by an earlier submission of this
+# same file; add it back through SUBSETS and widen --array to match if it is ever needed.
+SUBSETS="${SUBSETS:-1k 10k}"
 EPOCHS="${EPOCHS:-60}"
 BATCH_SIZE="${BATCH_SIZE:-256}"
 PATIENCE="${PATIENCE:-8}"
@@ -43,18 +49,22 @@ PATIENCE="${PATIENCE:-8}"
 # Seeds 42-44 already ran in the main array; these continue the sequence.
 CONFIGS=()
 for target in log10_pgen log10_pgen_1mm; do
-  for arm in irrm_scratch irrm_pretrained; do
-    for seed in 45 46 47 48 49 50 51; do
-      CONFIGS+=("$arm $target $seed")
+  for subset in $SUBSETS; do
+    for arm in irrm_scratch irrm_pretrained; do
+      for seed in 45 46 47 48 49 50 51; do
+        CONFIGS+=("$arm $target $subset $seed")
+      done
     done
   done
 done
 
+# Exit cleanly rather than failing, so an array wider than the config list leaves no
+# spurious FAILED tasks in the accounting record.
 if [ "${SLURM_ARRAY_TASK_ID:-0}" -ge "${#CONFIGS[@]}" ]; then
-  echo "task ${SLURM_ARRAY_TASK_ID} is past the end of the ${#CONFIGS[@]}-run list" >&2
-  exit 1
+  echo "task ${SLURM_ARRAY_TASK_ID} is past the end of the ${#CONFIGS[@]}-run list; nothing to do"
+  exit 0
 fi
-read -r ARM TARGET SEED <<< "${CONFIGS[${SLURM_ARRAY_TASK_ID:-0}]}"
+read -r ARM TARGET TRAIN_SUBSET SEED <<< "${CONFIGS[${SLURM_ARRAY_TASK_ID:-0}]}"
 
 mkdir -p "$OUTPUT_DIR"
 
