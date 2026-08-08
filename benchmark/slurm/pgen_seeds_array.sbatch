@@ -66,7 +66,10 @@ echo "arm=$ARM target=$TARGET subset=$TRAIN_SUBSET seed=$SEED (${#CONFIGS[@]} ru
 
 cd "$REPO"
 export PYTHONUNBUFFERED=1
-srun python -m benchmark.train_pgen_arm \
+# Called directly rather than through srun: the batch task already holds its own
+# allocation, and an inner step has to request the GPU again, which fails outright when
+# the per-user GPU quota is busy elsewhere.
+python -m benchmark.train_pgen_arm \
   --arm "$ARM" \
   --target "$TARGET" \
   --train-subset "$TRAIN_SUBSET" \
