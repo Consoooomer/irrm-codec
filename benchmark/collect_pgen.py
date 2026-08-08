@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from scipy import stats
 
 METRICS = ("rmse", "mae", "r2", "pearson_r", "spearman_rho", "bias")
 SUBSET_ORDER = {"1k": 0, "10k": 1, "all": 2}
@@ -105,16 +106,44 @@ def to_markdown(summary):
     return "\n".join(blocks) + "\n"
 
 
-def pretraining_delta(summary):
-    """RMSE improvement from IRRM pretraining, per target and training size."""
-    pivot = summary[summary.arm.isin(("irrm_scratch", "irrm_pretrained"))].pivot_table(
-        index=["target", "train_subset", "subset_order"], columns="arm", values="rmse_mean"
-    )
-    if not {"irrm_scratch", "irrm_pretrained"}.issubset(pivot.columns):
+def pretraining_delta(runs):
+    """Does IRRM pretraining help? RMSE difference with a significance test.
+
+    Seed spread for these two arms is comparable to the effect being measured, so the
+    difference of means alone cannot answer the question. Welch's t-test does not assume
+    the two arms have equal variance, which they do not.
+    """
+    rows = []
+    for (target, subset, order), group in runs.groupby(["target", "train_subset", "subset_order"]):
+        scratch = group.loc[group.arm == "irrm_scratch", "rmse"].to_numpy()
+        pretrained = group.loc[group.arm == "irrm_pretrained", "rmse"].to_numpy()
+        if len(scratch) < 2 or len(pretrained) < 2:
+            continue
+        # Lower RMSE is better, so a positive delta means pretraining won.
+        delta = scratch.mean() - pretrained.mean()
+        _, p_value = stats.ttest_ind(scratch, pretrained, equal_var=False)
+        rows.append(
+            {
+                "target": target,
+                "train_subset": subset,
+                "subset_order": order,
+                "n_scratch": len(scratch),
+                "n_pretrained": len(pretrained),
+                "irrm_scratch": scratch.mean(),
+                "irrm_pretrained": pretrained.mean(),
+                "rmse_delta": delta,
+                "relative_improvement": delta / scratch.mean(),
+                "p_value": p_value,
+                "verdict": (
+                    "no detectable effect"
+                    if p_value >= 0.05
+                    else ("pretraining helps" if delta > 0 else "pretraining hurts")
+                ),
+            }
+        )
+    if not rows:
         return None
-    pivot["rmse_delta"] = pivot["irrm_scratch"] - pivot["irrm_pretrained"]
-    pivot["relative_improvement"] = pivot["rmse_delta"] / pivot["irrm_scratch"]
-    return pivot.reset_index().sort_values(["target", "subset_order"])
+    return pd.DataFrame(rows).sort_values(["target", "subset_order"])
 
 
 def main():
@@ -130,13 +159,15 @@ def main():
     (output_dir / "pgen_summary.md").write_text(to_markdown(summary), encoding="utf-8")
 
     print(f"runs: {len(runs)}  arms: {runs.arm.nunique()}  targets: {runs.target.nunique()}")
-    delta = pretraining_delta(summary)
+    delta = pretraining_delta(runs)
     if delta is not None:
         delta.drop(columns=["subset_order"]).to_csv(output_dir / "pretraining_delta.csv", index=False)
         print("\nDoes IRRM pretraining help? (positive rmse_delta means pretraining wins)")
         print(
-            delta[["target", "train_subset", "irrm_scratch", "irrm_pretrained", "rmse_delta", "relative_improvement"]]
-            .to_string(index=False)
+            delta[
+                ["target", "train_subset", "n_scratch", "n_pretrained", "irrm_scratch",
+                 "irrm_pretrained", "rmse_delta", "p_value", "verdict"]
+            ].to_string(index=False)
         )
     print(f"\nwrote {output_dir}/pgen_runs.csv, pgen_summary.csv, pgen_summary.md")
 
