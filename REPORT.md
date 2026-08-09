@@ -173,9 +173,17 @@ Targets are standardized on train statistics and mapped back before any metric, 
 freshly initialized network does not spend its first epochs locating an offset near −6.5
 that Ridge fits for free. Reported errors are in log10 units.
 
-Neural arms ran ten seeds each on every cell — three from the main sweep plus seven more,
-added because the IRRM arms spread by 0.04–0.08 RMSE across seeds, which is larger than
-the effect they are meant to measure. 180 runs in total.
+Neural arms ran ten seeds on every cell: 180 runs. Ten rather than three because the two
+IRRM arms spread widely across seeds, and the effect they exist to measure is small by
+construction — the arms are the same architecture on the same data, differing only in
+their starting weights.
+
+The whole sweep was then run **twice**, under two learning-rate configurations: a constant
+1e-3, and a cosine schedule decaying to zero over the epoch budget (with early-stopping
+patience widened from 8 to 12 so the schedule reaches its tail). The second configuration
+was not a tuning pass but a robustness check, and it changed the headline conclusion. All
+tables below report the cosine runs, which converge better and vary less; the constant-rate
+numbers are kept in `results/pgen/` for comparison.
 
 ### Results on the full training split
 
@@ -185,73 +193,91 @@ Mean ± standard deviation over seeds, on the held-out test split.
 
 | arm | RMSE | MAE | R² | Pearson r | Spearman ρ | bias | train s | peak RSS MB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| irrm_pretrained | **0.2098** ± 0.0493 | 0.1262 | 0.9822 | 0.9928 | 0.9909 | +0.0606 | 232 | 1575 |
-| irrm_scratch | 0.2653 ± 0.0376 | 0.1730 | 0.9724 | 0.9894 | 0.9923 | +0.0609 | 135 | 1574 |
-| tcr_bert_mlp | 0.3115 ± 0.0073 | 0.2002 | 0.9627 | 0.9813 | 0.9852 | +0.0028 | 62 | 1671 |
-| sceptr_mlp | 0.4560 ± 0.0080 | 0.2636 | 0.9200 | 0.9599 | 0.9754 | +0.0484 | 53 | 1197 |
-| esm2_8m_mlp | 0.4794 ± 0.0092 | 0.2868 | 0.9116 | 0.9561 | 0.9721 | +0.0650 | 68 | 1301 |
-| tfidf_ridge | 0.5542 | 0.3671 | 0.8819 | 0.9391 | 0.9566 | +0.0035 | 10 | 716 |
+| irrm_pretrained | **0.2181** ± 0.0322 | 0.1248 | 0.9813 | 0.9935 | 0.9921 | +0.0338 | 187 | 1584 |
+| irrm_scratch | 0.2435 ± 0.0248 | 0.1583 | 0.9770 | 0.9916 | 0.9937 | +0.0466 | 105 | 1583 |
+| tcr_bert_mlp | 0.2766 ± 0.0006 | 0.1671 | 0.9706 | 0.9854 | 0.9908 | +0.0175 | 71 | 1668 |
+| sceptr_mlp | 0.4465 ± 0.0060 | 0.2510 | 0.9233 | 0.9621 | 0.9783 | +0.0642 | 58 | 1193 |
+| esm2_8m_mlp | 0.4539 ± 0.0015 | 0.2655 | 0.9208 | 0.9607 | 0.9762 | +0.0549 | 68 | 1295 |
+| tfidf_ridge | 0.5542 | 0.3671 | 0.8819 | 0.9391 | 0.9566 | +0.0035 | 9 | 717 |
 
 **`log10_pgen`, train = 79,730**
 
 | arm | RMSE | MAE | R² | Pearson r | Spearman ρ | bias | train s | peak RSS MB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| irrm_pretrained | **0.2909** ± 0.0474 | 0.1846 | 0.9753 | 0.9904 | 0.9876 | +0.1154 | 205 | 1582 |
-| irrm_scratch | 0.3358 ± 0.0713 | 0.2225 | 0.9666 | 0.9898 | 0.9904 | +0.0998 | 146 | 1569 |
-| tcr_bert_mlp | 0.4104 ± 0.0065 | 0.2641 | 0.9520 | 0.9761 | 0.9794 | +0.0299 | 64 | 1669 |
-| sceptr_mlp | 0.5833 ± 0.0035 | 0.3536 | 0.9031 | 0.9524 | 0.9649 | +0.0871 | 67 | 1200 |
-| esm2_8m_mlp | 0.6031 ± 0.0126 | 0.3811 | 0.8964 | 0.9475 | 0.9599 | +0.0433 | 66 | 1300 |
-| tfidf_ridge | 0.6210 | 0.4145 | 0.8901 | 0.9435 | 0.9563 | +0.0087 | 9 | 719 |
+| irrm_pretrained | **0.3102** ± 0.0388 | 0.1925 | 0.9722 | 0.9912 | 0.9883 | +0.1177 | 159 | 1593 |
+| irrm_scratch | 0.3114 ± 0.0333 | 0.2027 | 0.9721 | 0.9921 | 0.9928 | +0.0987 | 131 | 1580 |
+| tcr_bert_mlp | 0.3758 ± 0.0019 | 0.2333 | 0.9598 | 0.9800 | 0.9851 | +0.0238 | 74 | 1666 |
+| esm2_8m_mlp | 0.5728 ± 0.0005 | 0.3494 | 0.9065 | 0.9535 | 0.9673 | +0.0746 | 63 | 1296 |
+| sceptr_mlp | 0.5795 ± 0.0046 | 0.3442 | 0.9043 | 0.9532 | 0.9668 | +0.0976 | 61 | 1193 |
+| tfidf_ridge | 0.6210 | 0.4145 | 0.8901 | 0.9435 | 0.9563 | +0.0087 | 8 | 714 |
 
 The ordering is identical on both targets and at every training size: the two IRRM arms
 lead, TCR-BERT is the best frozen representation, then SCEPTR and ESM-2, with Ridge last.
-Per-size tables are in `results/pgen/pgen_summary.md`.
+The gaps are large — IRRM halves the error of SCEPTR, ESM-2 and Ridge — and far exceed
+seed spread. Per-size tables are in `results/pgen/pgen_summary.md`.
 
 For reference, the committed pgen notebook reports RMSE 0.5914, R² 0.9437 and Pearson
-0.9874 on `log10_pgen_1mm`. The pretrained arm here reaches RMSE 0.2098, R² 0.9822 and
-Pearson 0.9928 on a different split of the same data.
+0.9874 on `log10_pgen_1mm`. The best arm here reaches RMSE 0.2181, R² 0.9813 and Pearson
+0.9935 on a different split of the same data.
 
 ### Does IRRM pretraining improve Pgen prediction?
 
-Welch's t-test on RMSE across ten seeds per arm. A positive delta means pretraining won.
+**No — not consistently.** Welch's t-test on RMSE, ten seeds per arm, under both
+learning-rate configurations. A positive delta means pretraining won.
 
-| target | train | irrm_scratch | irrm_pretrained | Δ RMSE | p |
+| target | train | Δ RMSE (constant lr) | p | Δ RMSE (cosine) | p |
 | --- | --- | ---: | ---: | ---: | ---: |
-| log10_pgen | 1k | 0.8379 | 0.8550 | −0.017 | 0.527 |
-| log10_pgen | 10k | 0.5052 | 0.5422 | −0.037 | 0.157 |
-| log10_pgen | all | 0.3358 | 0.2909 | +0.045 | 0.118 |
-| log10_pgen_1mm | 1k | 0.6315 | 0.6569 | −0.025 | 0.307 |
-| log10_pgen_1mm | 10k | 0.3957 | 0.4087 | −0.013 | 0.500 |
-| **log10_pgen_1mm** | **all** | 0.2653 | **0.2098** | **+0.056** | **0.012** |
+| log10_pgen | 1k | −0.017 | 0.527 | +0.045 | 0.113 |
+| log10_pgen | 10k | −0.037 | 0.157 | −0.030 | **0.006** |
+| log10_pgen | all | +0.045 | 0.118 | +0.001 | 0.940 |
+| log10_pgen_1mm | 1k | −0.025 | 0.307 | +0.068 | **0.044** |
+| log10_pgen_1mm | 10k | −0.013 | 0.500 | −0.006 | 0.763 |
+| log10_pgen_1mm | all | +0.056 | **0.012** | +0.025 | 0.065 |
 
-**Yes, but narrowly: only on `log10_pgen_1mm` and only with the full training set**, where
-pretraining cuts RMSE by 20.9%. Every other cell is indistinguishable from zero, and in
-three of the four smaller-data cells the sign is negative.
+Under the constant rate, one cell was significant: pretraining cut RMSE by 20.9% on
+`log10_pgen_1mm` at full data, p = 0.012, and it replicated across an accidental rerun.
+That looked like a real, narrow effect.
 
-Two things support the one positive result beyond its p-value. It replicated: an earlier
-independent run of the same configuration gave Δ = +0.049 at p = 0.017, and the arms were
-retrained from scratch in between. And its direction is consistent with the mechanism —
-TCRemP encodes similarity to a panel of reference receptors, and `Pgen_1mm` sums
-probability over a sequence's single-mismatch neighbours. Both are neighbourhood
-quantities, whereas exact `Pgen` is a property of one sequence alone, and that is the
-target where transfer does nothing (p = 0.118).
+It did not survive the schedule change. The same cell falls to Δ = +0.025 at p = 0.065,
+while two different cells become significant — with **opposite signs**: pretraining
+"helps" at 1k on one target and "hurts" at 10k on the other. No cell is significant under
+both configurations, and three cells flip sign between them. That is the signature of
+noise being read as effect, not of a small effect being measured precisely.
 
-Against it: six comparisons were made. A Bonferroni correction over all six would require
-p < 0.008, which this result does not meet. Restricting to the two full-data comparisons,
-which are the primary ones, the threshold is p < 0.025 and it does. The finding should be
-read as suggestive and mechanistically plausible rather than firmly established.
+The mechanism is visible in the absolute numbers. Cosine scheduling improved almost every
+arm, but not the pretrained one:
+
+| arm, `log10_pgen_1mm` all | constant lr | cosine |
+| --- | ---: | ---: |
+| irrm_scratch | 0.2653 | **0.2435** |
+| irrm_pretrained | 0.2098 | 0.2181 |
+| tcr_bert_mlp | 0.3115 | **0.2766** |
+
+The from-scratch arm gained what the pretrained arm did not. The transferred encoder was
+supplying a good starting point that compensated for a poorly annealed learning rate; once
+the optimizer no longer needed compensating, the advantage disappeared. Pretraining was
+substituting for training quality rather than adding information.
+
+Seed spread also fell where the comparison lives — 0.071 → 0.033 and 0.055 → 0.017 on the
+from-scratch arm at `all` and 10k — so the cosine numbers are the more trustworthy ones,
+not merely the more recent.
+
+With six comparisons, a Bonferroni threshold is p < 0.008. Only the 10k "hurts" result
+meets it, and it contradicts the 1k "helps" result on the other target. The honest
+reading is that the sequence-to-TCRemP initialization has no reliable effect on Pgen
+prediction at any training size.
 
 ### Is the advantage larger in the low-data regime?
 
-**No — the opposite.** The effect appears only at 79,730 training sequences and is absent
-at 1k and 10k, where the sign is negative on three of four cells. This inverts the usual
-expectation that pretraining pays off most when labelled data is scarce.
+The question presupposes an advantage that the data does not support. Across both
+configurations and all six cells there is no consistent direction: the sign flips between
+configurations at 1k on both targets, and the two nominally significant results point
+opposite ways.
 
-The bias column shows the mechanism. At 1k the pretrained arm carries bias +0.31 and
-+0.24 against +0.16 and +0.15 for the from-scratch arm. The transferred encoder was fitted
-to predict 9000-dimensional TCRemP vectors, and its features push predictions in a
-systematic direction that a small training set cannot correct. With enough data the head
-overcomes it and the transferred features start to pay.
+One asymmetry does survive both runs. The pretrained arm carries a larger positive bias at
+small data — +0.32 and +0.24 at 1k against +0.23 for the from-scratch arm — so the
+transferred features do push predictions systematically, and a small training set corrects
+that less well. But this shows up as bias rather than as a reliable RMSE penalty.
 
 ### Quality against speed
 
@@ -297,25 +323,28 @@ that node, so the laptop comparison is the honest one to quote.
 ### Where IRRM-CODEC wins and loses
 
 **Wins: accuracy at every training size, on both targets.** IRRM leads all four baselines
-in all six cells. On the full split it reaches R² 0.982 and Pearson 0.993 for
-`log10_pgen_1mm`, against 0.963 for the best frozen representation.
+in all six cells. On the full split it reaches R² 0.981 and Pearson 0.994 for
+`log10_pgen_1mm`, and halves the error of SCEPTR, ESM-2 and Ridge. These margins are ten
+times the seed spread, so they are not in question.
 
 **Wins: the quality–speed trade-off against pretrained encoders.** Faster and more accurate
 than frozen ESM-2, TCR-BERT and SCEPTR simultaneously. For this task the large pretrained
-encoders contribute nothing.
+encoders contribute nothing on either axis.
 
-**Wins: two to three orders of magnitude over OLGA**, which is the argument the model exists
-to make.
+**Wins: 46× to 729× over OLGA** on identical hardware, which is the argument the model
+exists to make.
 
-**Partial: pretraining helps only in one corner.** The sequence-to-TCRemP initialization
-pays off on `log10_pgen_1mm` at full data (−20.9% RMSE) and nowhere else. Anyone adopting
-it should expect a modest, target-specific gain, not a general one.
+**Loses: the pretraining step buys nothing.** The sequence-to-TCRemP initialization shows no
+reliable effect once the learning rate is properly annealed, and what looked like a 20.9%
+gain under a constant rate was the pretrained encoder compensating for an untuned
+optimizer. The practical implication is direct: train the Pgen model from scratch and skip
+the pretraining stage, which costs an extra training run for no measurable return.
 
-**Loses: seed stability.** The IRRM arms vary by 0.04–0.08 RMSE across seeds where the
-frozen arms vary by 0.004–0.015 — roughly tenfold. Validation loss oscillates rather than
-descending smoothly, so early stopping fires at inconsistent epochs. The learning rate is
-constant at 1e-3 with no decay; a schedule would likely reduce this and is the clearest
-next improvement.
+**Loses: seed stability.** Even with cosine scheduling the IRRM arms vary by 0.017–0.092
+RMSE across seeds where the frozen arms vary by 0.0005–0.006 — still an order of magnitude
+wider, because these arms fit a full encoder rather than a head over fixed features. Any
+comparison between IRRM variants needs many seeds; three is not enough, as the first sweep
+demonstrated.
 
 **Loses: throughput against a trivial baseline.** TF-IDF + Ridge is 22× faster on CPU. If
 an application needs coarse Pgen estimates at maximum rate, k-mers remain the right tool.
@@ -339,8 +368,15 @@ Reproduce with `benchmark/slurm/pgen_array.sbatch` and
   holds for TRA or for other loci.
 - **One bottleneck width.** Reconstruction was compared at 64 dimensions. Projections at
   32 and 128 are cached in `data/benchmark/trb/bottleneck/` but were not trained.
-- **Six statistical comparisons** were made for the pretraining question; only one is
-  significant, and it does not survive a Bonferroni correction over all six.
+- **Six statistical comparisons** were made for the pretraining question, under each of two
+  learning-rate configurations. No cell is significant under both, and three flip sign
+  between them, which is why the conclusion is stated as absence of a reliable effect
+  rather than as a measured null.
+- **Sections 2 and 3 used different learning-rate schedules** — constant for reconstruction,
+  cosine for Pgen. The issues require identical settings across the arms compared within
+  each experiment, which holds; they are not comparable across sections. Reconstruction was
+  not rerun because its seed spread (±0.0006 to ±0.008) leaves nothing for a schedule to
+  fix.
 
 ## Environment
 
