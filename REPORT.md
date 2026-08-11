@@ -183,7 +183,7 @@ The whole sweep was then run **twice**, under two learning-rate configurations: 
 patience widened from 8 to 12 so the schedule reaches its tail). The second configuration
 was not a tuning pass but a robustness check, and it changed the headline conclusion. All
 tables below report the cosine runs, which converge better and vary less; the constant-rate
-numbers are kept in `results/pgen/` for comparison.
+numbers are kept in `results/pgen_constlr/` for comparison.
 
 ### Results on the full training split
 
